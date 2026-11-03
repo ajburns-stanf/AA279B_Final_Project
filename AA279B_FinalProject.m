@@ -37,13 +37,25 @@ mx = @(x) (x - (1-mu))*LU/1e4;       % Moon-centered, x 10^4 km
 my = @(y) y*LU/1e4;
 mz = @(z) z*LU/1e4;
 
-figure(1); clf; hold on; grid on; axis equal
-plot3(mx(W2(:,1)), my(W2(:,2)), mz(W2(:,3)), 'r', 'LineWidth', 1.2)  % L2 halo
-plot3(0, 0, 0, 'o', 'Color',[.5 .5 .5], 'MarkerFaceColor',[.5 .5 .5])  % Moon
-plot3(mx(xL2), 0, 0, 'k.', 'MarkerSize', 14)
-text(mx(xL2), 0, -0.9, 'L_2'); text(0, 0, -0.9, 'Moon')
-xlabel('x (10^4 km)'); ylabel('y (10^4 km)'); zlabel('z (10^4 km)')
-view(3)
+figure(1); clf; tiledlayout(1, 4, 'TileSpacing','compact', 'Padding','compact'); 
+
+% - Create each plot (1 for each view) -
+views  = {3, [0 90], [0 0], [90 0]};
+titles = {'3D View', 'xy-Plane', 'xz-Plane', 'yz-Plane'};
+for i = 1:4
+    nexttile; hold on; grid on; box on
+
+    % Plot Orbit/Moon/L2
+    label_H = plot3(mx(W2(:,1)), my(W2(:,2)), mz(W2(:,3)), 'r', 'LineWidth', 1.2);    % L2 Halo Orbit
+    label_M = plot3(0, 0, 0, 'o', 'Color',[.5 .5 .5], 'MarkerFaceColor',[.5 .5 .5]);  % Moon
+    label_L2 = plot3(mx(xL2), 0, 0, 'k.', 'MarkerSize', 14);                          % L2 Point
+    xlabel('x (10^4 km)'); ylabel('y (10^4 km)'); zlabel('z (10^4 km)')
+
+    % Fig Title/View
+    title(titles{i}); axis square; view(views{i});
+end
+fig1_lg = legend([label_H label_M label_L2], {'L_2 Halo Orbit', 'Moon', 'L_2 Point'}, 'Orientation','vertical'); fig1_lg.Layout.Tile = 'west';
+
 
 
 %% ========= Part 1b ===============
