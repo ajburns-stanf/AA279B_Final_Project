@@ -23,11 +23,12 @@ xL2 = fzero(Ux, [1-mu+1e-6, 1.5]);
 
 % -- Differentially correct L2 Halo Orbit (fixed z0) --
 max_iter = 50;
-X0_L2_halo = [1.1538469895730767; 0; -0.13879237192274263; 0; -0.21508764925342128; 0]; % JPL Halo Orbit Initial Condition
-[x0_h, vy0_h, P_L2_halo] = correct_halo(X0_L2_halo(1), X0_L2_halo(3), X0_L2_halo(5), mu, a_matrix_fxn, max_iter);
+X0_L2_halo = [1.0606924537198088; 0; 0.07354804500048147; 0; 0.3422130947784463; 0]; % Earth-side IC
+z0_h = X0_L2_halo(3);
+[x0_h, vy0_h, P_L2_halo] = correct_halo(X0_L2_halo(1), z0_h, X0_L2_halo(5), mu, a_matrix_fxn, max_iter);
 
 % -- Propagate State Transition Matrix Forward --
-X0_L2_halo = [x0_h; 0; X0_L2_halo(3); 0; vy0_h; 0];  
+X0_L2_halo = [x0_h; 0; z0_h; 0; vy0_h; 0];
 [t2, W2] = ode113(@(t,w) dynamics(t,w,a_matrix_fxn,mu), [0 P_L2_halo], [X0_L2_halo; Phi0(:)], options);
 
 % -- L2 Halo Orbit Plot --
@@ -49,7 +50,7 @@ view(3)
 %   Compute L2 Stable Invariant Manifolds
 % =================================
 disp('Part 1a: Compute Stable Invariant Manifold')
-pertubation = 1e-6;
+eps_r = 1e-6; eps_v = 1e-6; % pos, vel perturbations
 
 % -- Monodromy Matrix + Stable Eigenvector --
 M_L2 = reshape(W2(end,7:42), 6, 6); % Monodromy matrix only valid at t = one period, Pavlak Eq. (3.69)
@@ -62,9 +63,9 @@ vs_L2  = real(V_M2(:,is));  vs_L2 = vs_L2/norm(vs_L2(1:3));
 plot_eig(Lam_L2, "L2 Halo Orbit Eigenvalues");
 
 % -- Propagate Stable Manifold (backward in time) --
-n_arcs = 500; % number of arcs to draw
-time = -3.5*P_L2_halo; % propagate stable manifold backward in time for 3.5 periods
-[arcsS, secS] = manifold_arcs(W2, vs_L2, pertubation, time, a_matrix_fxn, mu, n_arcs); % only returns arcs which cross the moon's plane
+n_arcs = 100; % number of arcs to draw
+time = -2.7*P_L2_halo; % propagate stable manifold backward in time for X periods
+[arcsS, secS] = manifold_arcs(W2, vs_L2, eps_r, eps_v, time, a_matrix_fxn, mu, n_arcs); % only returns arcs which cross the moon's plane
 
 % -- Plot The Arcs --
 figure(3); clf; hold on; axis equal; grid on
@@ -76,7 +77,7 @@ end
 % Add Earth, Moon and L2 to plot
 hE = plot3(mx(-mu), 0, 0, 'o', 'Color',[0 .45 .74], 'MarkerFaceColor',[0 .45 .74], 'MarkerSize', 10);  % Earth
 hM = plot3(0, 0, 0, 'o', 'Color',[.4 .4 .4], 'MarkerFaceColor',[.5 .5 .5], 'MarkerSize', 6);           % Moon
-hL2 = plot3(mx(xL2), 0, 0, 'ko', 'MarkerFaceColor','k', 'MarkerSize', 4)                               % L2
+hL2 = plot3(mx(xL2), 0, 0, 'ko', 'MarkerFaceColor','k', 'MarkerSize', 4);                              % L2
 text(mx(-mu), 0, -2, 'Earth', 'HorizontalAlignment','center')
 text(0,       0, -2, 'Moon',  'HorizontalAlignment','center')
 text(mx(xL2), 0, -2, 'L_2',   'HorizontalAlignment','center')
@@ -239,28 +240,24 @@ end
 
 
 % ---- Part 1b: Propagate manifold arcs ----
-
-% !!!!!! NOTE PROB WANT TO UPDATE THIS WITH AN EVENT FUNCTION THAT CHECKS
-% PROXIMITY OF END OF ARC TO EARTH !!!!!!
-
 % Wo: orbit + STM history, vu: eigenvector at t=0, Tint<0 integrates backward (stable).
+% eps_r/eps_v: position/velocity step sizes, each applied to a unit vector.
 % Returns arcs (cell, [t x y z vx vy vz]) and sec rows [idx t x y z vx vy vz].
-function [arcsM, secM] = manifold_arcs(Wo, vu, pert, Tint, a_fxn, mu, nPts)
+function [arcs, sec] = manifold_arcs(Wo, vu, eps_r, eps_v, Tint, a_fxn, mu, nPts)
     idx  = round(linspace(1, size(Wo,1), nPts+1));  idx(end) = [];
     opts = odeset('RelTol',1e-12,'AbsTol',1e-12);
     arcs = {};  sec = [];
     for j = 1:numel(idx)
         Phi_k = reshape(Wo(idx(j),7:42), 6, 6);
         vk    = Phi_k*vu;                               % transport eigenvector
+        dr    = vk(1:3)/norm(vk(1:3));                  % unit position direction
+        dv    = vk(4:6)/norm(vk(4:6));                  % unit velocity direction
         xk    = Wo(idx(j),1:6)';
         for s = [+1 -1]                                 % both branches
-            w0 = [xk + s*pert*vk; reshape(eye(6),[],1)];
+            w0 = [xk + s*[eps_r*dr; eps_v*dv]; reshape(eye(6),[],1)];
             [t,X] = ode113(@(t,w) dynamics(t,w,a_fxn,mu), [0 Tint], w0, opts);
             arcs{end+1}  = [t, X(:,1:6)];                % keep all arcs
             sec(end+1,:) = [idx(j), t(end), X(end,1:6)]; % final state of each arc
         end
     end
-    % Only keep arcs that cross the moons plane (heading towards earth)
-    toMoon = cellfun(@(a) any(a(:,2) < 1-mu), arcs);   % logical mask
-    arcsM  = arcs(toMoon); secM   = sec(toMoon,:);
 end
