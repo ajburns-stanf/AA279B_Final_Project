@@ -14,7 +14,7 @@ mu = 0.012150585609624; % mu of the moon
 C = 3.08; % jacobi constant
 
 % -- Determine A Matrix --
-a_matrix_fxn = compute_a(); % function from partialF/partialX
+a_matrix_fxn = compute_a_CR3BP(); % function from partialF/partialX
 Phi0 = eye(6,6);
 
 % -- Determine Liberation Points --
@@ -29,7 +29,7 @@ z0_h = X0_L2_halo(3);
 
 % -- Propagate State Transition Matrix Forward --
 X0_L2_halo = [x0_h; 0; z0_h; 0; vy0_h; 0];
-[t2, W2] = ode113(@(t,w) dynamics(t,w,a_matrix_fxn,mu), [0 P_L2_halo], [X0_L2_halo; Phi0(:)], options);
+[t2, W2] = ode113(@(t,w) dynamics_CR3BP(t,w,a_matrix_fxn,mu), [0 P_L2_halo], [X0_L2_halo; Phi0(:)], options);
 
 % -- L2 Halo Orbit Plot --
 LU = 384400;                         % km (Pavlak)
@@ -92,61 +92,58 @@ view(3)
 % =================================
 
 
-%% ======= Helper Functions =======
 
-% ---- Part 1a: Compute A(t) (Phi_dot = A(t)*phi_0 ----
-function a_matrix = compute_a()
+%% ======= Part 1: Helper Functions =======
+
+% ---- Part 1a: Compute A(t) & accels (Phi_dot = A(t)*phi_0 ----
+function a_matrix = compute_a_CR3BP()
     syms x y z vx vy vz mu real
+    r = [x; y; z];  v = [vx; vy; vz];
+
+    % -- Earth-Moon Rotating Frame Angular Velocity --
+    omega = [0 0 1].'; omega_dot = [0 0 0].';
 
     % -- Distances, Eqs. 2.23 - 2.24 --
-    d13 = sqrt((x+mu)^2 + y^2 + z^2);
-    d23 = sqrt((x - 1 + mu)^2 + y^2 + z^2);
+    r_ec = sqrt((x+mu)^2 + y^2 + z^2); % Earth
+    r_mc = sqrt((x - 1 + mu)^2 + y^2 + z^2); % Moon
 
-    % -- Accelerations, Eqs. 2.20 - 2.22 --
-    ax =  2*vy + x - (1-mu)*(x+mu)/d13^3 - mu*(x-1+mu)/d23^3;
-    ay = -2*vx + y - (1-mu)*y/d13^3 - mu*y/d23^3;
-    az = -(1-mu)*z/d13^3 - mu*z/d23^3;
+    % -- Accelerations, Pavlak Eqs. 2.20 - 2.22. Replaced with Psuedo-Potential Fxn --
+    Upsilon = 0.5*omega(3)^2*(x^2 + y^2) + (1-mu)/r_ec + mu/r_mc;
+    acc = -2*cross(omega, v) - cross(omega_dot, r) + gradient(Upsilon, r);
 
     % -- State vector and first-order EOM, Eq. 3.13 / 3.15 --
-    state = [x; y; z; vx; vy; vz];
-    f = [vx; vy; vz; ax; ay; az];
+    state = [r; v];
+    f = [v; acc];
 
     % -- Jacobian, A(t) = df/dstate (Eq. 3.17) --
     A_sym = jacobian(f, state);
 
-    % -- Optional: simplify and sanity-check --
+    % -- Simplify A_sym --
     A_sym = simplify(A_sym);
     disp(A_sym)
 
     % -- Return as a function handle --
-    a_matrix = matlabFunction(A_sym, 'Vars', {x, y, z, mu});
+    a_matrix = matlabFunction(A_sym, acc, 'Vars', {x, y, z, vx, vy, vz, mu});
 end
 
 
 % ---- Part 1a: Compute Trajectory and STM ----
-function eom_Aug = dynamics(t, w, a_matrix_fxn, mu)
-    % Unpack w = [x; phi]' (42x1)
-    x  = w(1);  y  = w(2);  z  = w(3);
-    vx = w(4);  vy = w(5);  vz = w(6);
+function eom_Aug = dynamics_CR3BP(t, w, a_matrix_fxn, mu)
+    % -- Unpack w = [x; phi]' (42x1) --
+    x  = w(1); y = w(2); z = w(3);
+    vx = w(4); vy = w(5); vz = w(6);
     Phi = reshape(w(7:42), 6, 6);
 
-    % Compute x_dot Eq 2.20-2.22
-    d13 = sqrt((x+mu)^2 + y^2 + z^2);
-    d23 = sqrt((x - 1 + mu)^2 + y^2 + z^2);
+    % -- Computed A/accels from Psuedo-Potential Fxn --
+    [A, acc] = a_matrix_fxn(x, y, z, vx, vy, vz, mu);
 
-    ax =  2*vy + x - (1-mu)*(x+mu)/d13^3 - mu*(x-1+mu)/d23^3;
-    ay = -2*vx + y - (1-mu)*y/d13^3 - mu*y/d23^3;
-    az = -(1-mu)*z/d13^3 - mu*z/d23^3;
+    x_dot   = [vx; vy; vz; acc];
 
-    x_dot = [vx; vy; vz; ax; ay; az];
-    
     % Compute phi_dot = A(t)*Phi(t) - EQ 3.24
-    A = a_matrix_fxn(x, y, z, mu);
-
     phi_dot = A*Phi;
 
     % Ending Augmented matrix (state + stm)
-    eom_Aug = [x_dot; phi_dot(:)]; 
+    eom_Aug = [x_dot; phi_dot(:)];
 end
 
 
@@ -161,7 +158,7 @@ function [x0, vy0, P] = correct_halo(x0, z0, vy0, mu, a_fxn, max_iter)
     for k = 1:max_iter
         % -- Evaluate current ICs w0 --
         w0 = [x0; 0; z0; 0; vy0; 0; reshape(eye(6),[],1)];
-        [~,~,te,we,] = ode113(@(t,w) dynamics(t,w,a_fxn,mu), [0 10], w0, options);
+        [~,~,te,we,] = ode113(@(t,w) dynamics_CR3BP(t,w,a_fxn,mu), [0 10], w0, options);
 
         % -- Unpack ode113 output --
         wf  = we(1,:)'; % satellite state at the first crossing
@@ -178,7 +175,7 @@ function [x0, vy0, P] = correct_halo(x0, z0, vy0, mu, a_fxn, max_iter)
         % -- If Error > allowed, perform differential correction --
 
         % - Compute State Derivative - 
-        w_dot_full = dynamics(0, wf, a_fxn, mu); % full state derivative at crossing
+        w_dot_full = dynamics_CR3BP(0, wf, a_fxn, mu); % full state derivative at crossing
         w_dot = w_dot_full(1:6); % state derivative only
 
         % - Compute Jacobian -
@@ -255,9 +252,41 @@ function [arcs, sec] = manifold_arcs(Wo, vu, eps_r, eps_v, Tint, a_fxn, mu, nPts
         xk    = Wo(idx(j),1:6)';
         for s = [+1 -1]                                 % both branches
             w0 = [xk + s*[eps_r*dr; eps_v*dv]; reshape(eye(6),[],1)];
-            [t,X] = ode113(@(t,w) dynamics(t,w,a_fxn,mu), [0 Tint], w0, opts);
+            [t,X] = ode113(@(t,w) dynamics_CR3BP(t,w,a_fxn,mu), [0 Tint], w0, opts);
             arcs{end+1}  = [t, X(:,1:6)];                % keep all arcs
             sec(end+1,:) = [idx(j), t(end), X(end,1:6)]; % final state of each arc
         end
     end
+end
+
+
+
+%% ======= Part 2: Helper Functions =======
+
+% ---- Part 2a: Compute BCR4BP A(t) & accels (Phi_dot = A(t)*phi_0 ----
+function a_matrix = compute_a_BCR4BP()
+    syms x y z vx vy vz mu real
+    r = [x; y; z];  v = [vx; vy; vz];
+    
+    % TODO
+end
+
+
+% ---- Part 2a: Compute Trajectory and STM for BCR4BP ----
+function eom_Aug = dynamics_BCR4BP(t, w, a_matrix_fxn, mu)
+    % -- Unpack w = [x; phi]' (42x1) --
+    x  = w(1); y = w(2); z = w(3);
+    vx = w(4); vy = w(5); vz = w(6);
+    Phi = reshape(w(7:42), 6, 6);
+    
+    % -- Computed A/accels from Psuedo-Potential Fxn --
+    % TODO
+    
+    x_dot   = [vx; vy; vz; acc];
+    
+    % Compute phi_dot = A(t)*Phi(t) - EQ 3.24
+    phi_dot = A*Phi;
+    
+    % Ending Augmented matrix (state + stm)
+    eom_Aug = [x_dot; phi_dot(:)];
 end
