@@ -1,6 +1,7 @@
 %% AA 279B Final Project: L2 Halo to Earth Trajectories
 % = Alexander Burns, Kaila Coimbra, Yuji Takubo =
 clear; clc; close all;
+addpath(fullfile(fileparts(mfilename('fullpath')), 'bcr4bp')); % BCR4BP functions
 
 
 %% ========= Part 1a ===============
@@ -102,6 +103,7 @@ view(3)
 %% ========= Part 2 ===============
 %   Grid Search To Identify Candidate Transfer Trajectories
 % =================================
+prm = bcr4bp_params(); % BCR4BP constants and units
 
 
 
@@ -272,33 +274,3 @@ function [arcs, sec] = manifold_arcs(Wo, vu, eps_r, eps_v, Tint, a_fxn, mu, nPts
 end
 
 
-
-%% ======= Part 2: Helper Functions =======
-
-% ---- Part 2a: Compute BCR4BP A(t) & accels (Phi_dot = A(t)*phi_0 ----
-function a_matrix = compute_a_BCR4BP()
-    syms x y z vx vy vz mu real
-    r = [x; y; z];  v = [vx; vy; vz];
-    
-    % TODO
-end
-
-
-% ---- Part 2a: Compute Trajectory and STM for BCR4BP ----
-function eom_Aug = dynamics_BCR4BP(t, w, a_matrix_fxn, mu)
-    % -- Unpack w = [x; phi]' (42x1) --
-    x  = w(1); y = w(2); z = w(3);
-    vx = w(4); vy = w(5); vz = w(6);
-    Phi = reshape(w(7:42), 6, 6);
-    
-    % -- Computed A/accels from Psuedo-Potential Fxn --
-    % TODO
-    
-    x_dot   = [vx; vy; vz; acc];
-    
-    % Compute phi_dot = A(t)*Phi(t) - EQ 3.24
-    phi_dot = A*Phi;
-    
-    % Ending Augmented matrix (state + stm)
-    eom_Aug = [x_dot; phi_dot(:)];
-end
