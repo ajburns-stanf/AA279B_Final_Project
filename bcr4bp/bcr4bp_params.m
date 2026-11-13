@@ -28,4 +28,10 @@ function prm = bcr4bp_params(lstar)
     prm.RM      = 1737.4/lstar;
     prm.hLEO_km = 185;
     prm.rLEO    = (6378.137 + prm.hLEO_km)/lstar;
+
+    % Grid-search settings
+    prm.eps_km = 100;    % arrival-state shift along the stable eigenvector (km)
+    prm.dt_d   = 180;    % search window (days backward)
+    prm.tol    = 1e-10;  % ode113 relative and absolute tolerance
+    prm.r_esc  = 8;      % escape radius from B1 (r_esc * lstar = 3.08e6 km, chosen to be twice Earth's Hill radius)
 end
