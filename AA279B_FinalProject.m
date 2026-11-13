@@ -103,7 +103,28 @@ view(3)
 %% ========= Part 2 ===============
 %   Grid Search To Identify Candidate Transfer Trajectories
 % =================================
-prm = bcr4bp_params(); % BCR4BP constants and units
+prm = bcr4bp_params(); % BCR4BP constants
+
+% Halo solution for the arrival states near the stable manifold 
+halo.sol = ode113(@(t,w) dynamics_CR3BP(t,w,a_matrix_fxn,mu), [0 P_L2_halo], [X0_L2_halo; Phi0(:)], options);
+halo.vs  = vs_L2;  halo.P = P_L2_halo;
+
+% Grid over Sun angle, halo phase and branch; delete .mat to rerun
+out_dir  = fileparts(fileparts(fileparts(which('bcr4bp_params')))); % folder holding the repo, results saved outside repo
+res_file = fullfile(out_dir, 'results', 'grid_coarse.mat');
+if isfile(res_file)
+    load(res_file, 'res');
+else
+    res = grid_search(halo, prm, 0:5:355, (0:99)/100);
+    if ~isfolder(fileparts(res_file)), mkdir(fileparts(res_file)); end
+    save(res_file, 'res');
+end
+fprintf('Grid: %d runs, %d viable (lowest perigee <= %d km)\n', numel(res.hmin_km), nnz(res.viable), prm.hLEO_km);
+
+% Grid figures (PDFs saved outside repo)
+picks = [10 0.66 1; 180 0.54 -1; 280 0.07 -1; 25 0.13 -1];  % sample transfers T1-T4 [Sun angle (deg), tau, p]: true-perigee viable points
+plot_grid_maps(res, prm, fullfile(out_dir, 'figures'), picks);
+plot_transfers(res, halo, prm, fullfile(out_dir, 'figures'), picks);
 
 
 
