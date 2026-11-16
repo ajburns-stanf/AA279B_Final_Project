@@ -26,7 +26,7 @@ function prm = bcr4bp_params(lstar)
     prm.GM_E    = GM_E;                       % km^3/s^2
     prm.RE      = 6378.137/lstar;
     prm.RM      = 1737.4/lstar;
-    prm.hLEO_km = 185;
+    prm.hLEO_km = 700;
     prm.rLEO    = (6378.137 + prm.hLEO_km)/lstar;
 
     % Grid-search settings
@@ -34,4 +34,19 @@ function prm = bcr4bp_params(lstar)
     prm.dt_d   = 180;    % search window (days backward)
     prm.tol    = 1e-10;  % ode113 relative and absolute tolerance
     prm.r_esc  = 8;      % escape radius from B1 (r_esc * lstar = 3.08e6 km, chosen to be twice Earth's Hill radius)
+
+    % Differential correction; per-variable entries follow z = [dv_HOI (3); tp; tau; thS0]
+    prm.dc.r_flyby_km  = 2e4;                         % reject seeds passing closer to the Moon (km)
+    prm.dc.tol         = 1e-12;                       % ode113 tolerance
+    prm.dc.newton_tol  = 1e-9;                        % Newton tolerance on |F| (~7 mm in radius)
+    prm.dc.newton_iter = 30;                          % Newton iteration limit
+    prm.dc.newton_free = logical([1 1 1 1 0 0]);      % Stage 1 (Newton) variables: dv, tp
+    prm.dc.opt_free    = logical([1 1 1 1 1 1]);      % Stage 2 variables: all
+    prm.dc.opt_inner   = [4 6];                       % Stage 2 inner variables, solved by Newton: tp, thS0 (fmincon moves the rest)
+    prm.dc.scale       = [0.01 0.01 0.01 1 1e-3 0.1]; % one scaled unit (m/s, days, -, deg)
+    prm.dc.bound       = [5 5 5 3 0.02 5];            % Stage 2 box about the Newton solution (same units)
+    prm.dc.hoi_eps_mps = 1e-3;                        % |HOI| smoothing in the cost (m/s)
+    prm.dc.opt_iter    = 100;                         % fmincon iteration limit
+    prm.dc.opt_tol     = 1e-5;                        % fmincon optimality tolerance
+    prm.dc.display     = 'off';                       % fmincon display ('iter' to watch)
 end
