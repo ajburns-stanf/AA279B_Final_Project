@@ -8,7 +8,7 @@ function fig = plot_grid_maps(res, prm, fig_dir, picks)
     lab = {'Exterior', 'Interior'};
     th  = res.th_deg;  tau = res.taus;
 
-    % Perigee maps (Parker & Anderson Figs. 3-48, 3-49): black = reaches 185 km or the Earth
+    % Perigee maps (Parker & Anderson Figs. 3-48, 3-49): black = reaches the LEO altitude (prm.hLEO_km) or the Earth
     fig = figure('Units', 'inches', 'Position', [1 1 12 9]);  col = plot_style(fig);
     tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     cp = [col.blue; col.vermillion; col.green; col.orange; col.purple; col.skyblue];  % T1, T2, ... colors as in plot_transfers
